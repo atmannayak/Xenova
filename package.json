@@ -15,7 +15,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-async-handler": "^1.2.0",
+    "framer-motion": "^14.0.0",
     "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^1.51.0",
     "mongoose": "^8.4.1",
     "multer": "^2.2.0"
   },

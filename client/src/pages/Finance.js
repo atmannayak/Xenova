@@ -6,6 +6,9 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Loader2,
+  AlertTriangle,
+  BellRing,
+  Settings,
 } from 'lucide-react';
 import { financeApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -23,7 +26,7 @@ const emptyForm = {
 };
 
 const formatCurrency = (amount) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount || 0);
 
 const CATEGORY_STYLES = {
   Food: 'bg-sage-600/10 text-sage-700 dark:text-sage-400',
@@ -51,6 +54,40 @@ const Finance = () => {
   const [typeFilter, setTypeFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
 
+  // Budget modal / input state
+  const [showBudgetInput, setShowBudgetInput] = useState(false);
+  const [newBudget, setNewBudget] = useState('');
+  const [savingBudget, setSavingBudget] = useState(false);
+
+  // Check and trigger budget alerts for 50%, 80%, and zero-budget conditions
+  const checkBudgetAlerts = (summaryData) => {
+    if (!summaryData) return;
+
+    const budget = summaryData.monthlyBudget || 0;
+    const spent = summaryData.monthExpenses || 0;
+
+    if (budget === 0 && spent > 0) {
+      toast.error(
+        `🚨 Budget Alert: You have spent ${formatCurrency(spent)} but your monthly budget is set to ₹0! Please set a budget limit.`
+      );
+      return;
+    }
+
+    if (budget > 0) {
+      const percentUsed = Math.round((spent / budget) * 100);
+
+      if (percentUsed >= 80) {
+        toast.error(
+          `🚨 Critical Budget Warning! You have spent ${percentUsed}% (${formatCurrency(spent)} of ${formatCurrency(budget)}) of your monthly budget!`
+        );
+      } else if (percentUsed >= 50) {
+        toast.info(
+          `⚠️ Budget Alert: You have crossed 50% spending (${percentUsed}% - ${formatCurrency(spent)} of ${formatCurrency(budget)}).`
+        );
+      }
+    }
+  };
+
   const loadAll = async () => {
     setLoading(true);
     try {
@@ -60,6 +97,7 @@ const Finance = () => {
       ]);
       setSummary(summaryRes.data);
       setTransactions(txRes.data.transactions);
+      checkBudgetAlerts(summaryRes.data);
     } catch (error) {
       toast.error('Could not load your finance data');
     } finally {
@@ -103,12 +141,69 @@ const Finance = () => {
       resetForm();
       const { data: summaryData } = await financeApi.getSummary();
       setSummary(summaryData);
+      checkBudgetAlerts(summaryData);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Something went wrong');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleUpdateBudget = async (e) => {
+  e.preventDefault();
+
+  const budget = parseFloat(newBudget);
+
+  if (
+    !newBudget ||
+    Number.isNaN(budget) ||
+    budget <= 0
+  ) {
+    toast.error(
+      'Please enter a valid monthly budget amount'
+    );
+    return;
+  }
+
+  setSavingBudget(true);
+
+  try {
+    const { data } =
+      await financeApi.updateBudget({
+        monthlyBudget: budget,
+      });
+
+    toast.success(
+      `Monthly budget set to ${formatCurrency(
+        data.monthlyBudget
+      )}`
+    );
+
+    setShowBudgetInput(false);
+    setNewBudget('');
+
+    // Reload the latest summary
+    const { data: summaryData } =
+      await financeApi.getSummary();
+
+    setSummary(summaryData);
+
+    // Check budget alerts
+    checkBudgetAlerts(summaryData);
+  } catch (error) {
+    console.error(
+      'Budget update error:',
+      error
+    );
+
+    toast.error(
+      error.response?.data?.message ||
+        'Failed to update monthly budget'
+    );
+  } finally {
+    setSavingBudget(false);
+  }
+};
 
   const startEdit = (t) => {
     setEditingId(t._id);
@@ -132,6 +227,7 @@ const Finance = () => {
       toast.success('Transaction deleted');
       const { data: summaryData } = await financeApi.getSummary();
       setSummary(summaryData);
+      checkBudgetAlerts(summaryData);
     } catch (error) {
       toast.error('Could not delete transaction');
     } finally {
@@ -149,8 +245,10 @@ const Finance = () => {
     });
   }, [transactions, typeFilter, categoryFilter, search]);
 
-  const budgetPercent = summary?.budgetUsagePercent || 0;
-  const budgetColor = budgetPercent >= 90 ? 'bg-red-500' : budgetPercent >= 70 ? 'bg-amber-500' : 'bg-sage-600';
+  const monthlyBudget = summary?.monthlyBudget || 0;
+  const monthExpenses = summary?.monthExpenses || 0;
+  const budgetPercent = monthlyBudget > 0 ? Math.round((monthExpenses / monthlyBudget) * 100) : 0;
+  const budgetColor = budgetPercent >= 80 ? 'bg-red-500' : budgetPercent >= 50 ? 'bg-amber-500' : 'bg-sage-600';
 
   return (
     <div className="space-y-6">
@@ -162,6 +260,43 @@ const Finance = () => {
           Track every rupee coming in and going out
         </p>
       </div>
+
+      {/* Dynamic Budget Alert Banner */}
+      {((monthlyBudget > 0 && budgetPercent >= 50) || (monthlyBudget === 0 && monthExpenses > 0)) && (
+        <div
+          className={`flex items-center justify-between rounded-xl p-4 border ${
+            budgetPercent >= 80 || monthlyBudget === 0
+              ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400'
+              : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            {budgetPercent >= 80 || monthlyBudget === 0 ? <AlertTriangle size={20} /> : <BellRing size={20} />}
+            <div>
+              <p className="text-sm font-semibold">
+                {monthlyBudget === 0
+                  ? 'No Monthly Budget Set!'
+                  : budgetPercent >= 80
+                  ? 'Critical Budget Warning (80%+ Used)'
+                  : 'Budget Caution (50%+ Used)'}
+              </p>
+              <p className="text-xs opacity-90">
+                {monthlyBudget === 0
+                  ? `You have spent ${formatCurrency(monthExpenses)} without setting a monthly budget limit.`
+                  : `You have used ${budgetPercent}% of your monthly limit (${formatCurrency(monthExpenses)} / ${formatCurrency(monthlyBudget)}).`}
+              </p>
+            </div>
+          </div>
+          {monthlyBudget === 0 && (
+            <button
+              onClick={() => setShowBudgetInput(true)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
+            >
+              Set Budget
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Quick add form */}
@@ -177,13 +312,13 @@ const Finance = () => {
               value={form.title}
               onChange={handleChange}
               className="input"
-              placeholder="e.g. Grocery run"
+              placeholder="e.g. Grocery run / Books"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Amount</label>
+              <label className="label">Amount (₹)</label>
               <input
                 name="amount"
                 type="number"
@@ -248,21 +383,48 @@ const Finance = () => {
 
         <div className="space-y-6 lg:col-span-2">
           {/* Budget overview */}
-          <div className="card p-5">
-            <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              Budget overview
-            </h2>
+          <div className="card p-5 relative">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                Budget overview
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowBudgetInput(!showBudgetInput)}
+                className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-600 font-medium"
+              >
+                <Settings size={14} />
+                {showBudgetInput ? 'Cancel' : 'Set Budget'}
+              </button>
+            </div>
+
+            {/* Set Budget Form */}
+            {showBudgetInput && (
+              <form onSubmit={handleUpdateBudget} className="mb-4 flex items-center gap-2 bg-zinc-800/40 p-3 rounded-lg">
+                <input
+                  type="number"
+                  placeholder="Enter Monthly Budget (₹)"
+                  value={newBudget}
+                  onChange={(e) => setNewBudget(e.target.value)}
+                  className="input text-xs flex-1"
+                />
+                <button type="submit" disabled={savingBudget} className="btn-primary text-xs py-1.5 px-3">
+                  {savingBudget ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
+                </button>
+              </form>
+            )}
+
             <div className="grid grid-cols-3 gap-4 text-center sm:text-left">
               <div>
                 <p className="text-xs text-zinc-500">Monthly budget</p>
                 <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                  {formatCurrency(summary?.monthlyBudget)}
+                  {formatCurrency(monthlyBudget)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-zinc-500">Total spent</p>
                 <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                  {formatCurrency(summary?.monthExpenses)}
+                  {formatCurrency(monthExpenses)}
                 </p>
               </div>
               <div>
@@ -279,12 +441,12 @@ const Finance = () => {
             <div className="mt-4">
               <div className="mb-1 flex justify-between text-xs text-zinc-500">
                 <span>{budgetPercent}% used</span>
-                <span>{formatCurrency(summary?.monthExpenses)} / {formatCurrency(summary?.monthlyBudget)}</span>
+                <span>{formatCurrency(monthExpenses)} / {formatCurrency(monthlyBudget)}</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                 <div
                   className={`h-full rounded-full ${budgetColor} transition-all duration-500`}
-                  style={{ width: `${budgetPercent}%` }}
+                  style={{ width: `${Math.min(budgetPercent, 100)}%` }}
                 />
               </div>
             </div>
