@@ -417,12 +417,6 @@ const Dashboard = () => {
         0
     );
 
-  const todaysCompletedActivities =
-    Number(
-      productivity?.todaysCompletedActivities ||
-        0
-    );
-
   const weeklyHours =
     Number(
       productivity?.weeklyFocusHours || 0

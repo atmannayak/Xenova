@@ -23,14 +23,12 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { useNavigate } from 'react-router-dom';
 
 const Settings = () => {
   const { user, updateUser } =
     useAuth();
 
   const toast = useToast();
-  const navigate = useNavigate();
 
   // ===========================================================================
   // DARK MODE
