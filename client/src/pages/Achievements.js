@@ -368,7 +368,10 @@ const Achievements = () => {
   // -------------------------------------------------------------------------
 
   const achievements =
-    data?.achievements || [];
+    useMemo(
+      () => data?.achievements || [],
+      [data?.achievements]
+    );
 
   const summary =
     data?.summary || {

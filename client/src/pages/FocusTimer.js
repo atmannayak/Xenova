@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -142,16 +143,23 @@ const FocusTimer = () => {
   // TIMER DURATIONS
   // -------------------------------------------------------------------------
 
-  const durations = {
-    focus:
-      pomodoro.focus * 60,
+  const durations = useMemo(
+    () => ({
+      focus:
+        pomodoro.focus * 60,
 
-    short_break:
-      pomodoro.shortBreak * 60,
+      short_break:
+        pomodoro.shortBreak * 60,
 
-    long_break:
-      pomodoro.longBreak * 60,
-  };
+      long_break:
+        pomodoro.longBreak * 60,
+    }),
+    [
+      pomodoro.focus,
+      pomodoro.shortBreak,
+      pomodoro.longBreak,
+    ]
+  );
 
   // -------------------------------------------------------------------------
   // STATE
@@ -576,9 +584,7 @@ const FocusTimer = () => {
       cyclesCompleted,
       saveSession,
       toast,
-      durations.focus,
-      durations.short_break,
-      durations.long_break,
+      durations,
     ]);
 
   // -------------------------------------------------------------------------
